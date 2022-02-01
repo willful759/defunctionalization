@@ -35,6 +35,16 @@ class Concat:
     cont: Union['Done', 'Concat', 'Next']
 
 
+class Thunk:
+    def __init__(self, fn, *args, **kwargs):
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(*self.args, **self.kwargs)
+
+
 @dataclass
 class BinaryTree:
     head: Leaf | Node = None
@@ -154,9 +164,64 @@ class BinaryTree:
                 return BinaryTree._traverse_apply(
                     left, fn, Next(right, value, fn, cont))
 
-    def traverse(self, fn: Callable = lambda x: x):
-        return BinaryTree._traverse_apply(
-            self.head, fn, Done())
+    @staticmethod
+    def _trampoline(thunk):
+        # since python doesn't have tail call optimization
+        # we need to implement our own
+        while isinstance(thunk, Thunk):
+            thunk = thunk()
+        return thunk
+
+    @staticmethod
+    def _apply_thunk(cont: Done | Next | Concat, value):
+        match cont:
+            case Done():
+                return value
+
+            case Next(right, val, fn, cont):
+                return Thunk(BinaryTree._traverse_apply_thunk,
+                             right, fn,
+                             Concat(value, val, fn, cont)
+                             )
+
+            case Concat(ls, val, fn, cont):
+                return Thunk(BinaryTree._apply_thunk,
+                             cont, ls + [fn(val)] + value
+                             )
+
+    @staticmethod
+    def _traverse_apply_thunk(root, fn, cont):
+        match root:
+            case None:
+                return Thunk(BinaryTree._apply_thunk, cont, [])
+
+            case Leaf(value):
+                return Thunk(BinaryTree._apply_thunk, cont, [fn(value)])
+
+            case Node(left, value, right):
+                return Thunk(
+                    BinaryTree._traverse_apply_thunk, left, fn,
+                    Next(right, value, fn, cont)
+                )
+
+    def traverse(self, fn: Callable = lambda x: x, strategy: str = 'thunk'):
+        match strategy:
+            case 'apply':
+                return BinaryTree._traverse_apply(self.head, fn, Done())
+            case 'explicit':
+                return BinaryTree._traverse_explicit(
+                    self.head, fn, BinaryTree._done
+                )
+            case 'cps':
+                return BinaryTree._traverse_cps(self.head, fn, lambda x: x)
+            case 'naive':
+                return BinaryTree._traverse_naive(self.head, fn)
+            case 'thunk':
+                return BinaryTree._trampoline(
+                    BinaryTree._traverse_apply_thunk(self.head, fn, Done())
+                )
+            case _:
+                raise ValueError(f"invalid strategy: {strategy}")
 
     def insert(self, value):
         self.head = BinaryTree._insert(self.head, value)
@@ -169,7 +234,6 @@ def main():
     tree.insert(0)
     tree.insert(3)
     tree.insert(4)
-    print(tree)
     for node in tree.traverse():
         print(node)
 
