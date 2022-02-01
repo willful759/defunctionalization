@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Union, Callable
 
 
@@ -17,6 +17,7 @@ class Node:
 @dataclass
 class Done:
     pass
+
 
 @dataclass
 class Next:
@@ -95,12 +96,12 @@ class BinaryTree:
                 )
 
     @staticmethod
-    def _done(fn):
-        # sadly there's no currying in python
-        return lambda x: [fn(x)]
+    def _done(x):
+        return x
 
     @staticmethod
     def _next(val, right, fn):
+        # sadly there's no currying in python
         return lambda ls: BinaryTree._traverse_explicit(
             right, fn, BinaryTree._concat(ls, val, fn))
 
@@ -112,16 +113,17 @@ class BinaryTree:
     def _traverse_explicit(root, fn: Callable, cont: Callable):
         match root:
             case None:
-                return []
+                return cont([])
 
             case Leaf(value):
                 return cont([fn(value)])
 
             case Node(left, value, right):
-                return BinaryTree._traverse_explicit(
+                print(cont)
+                return cont(BinaryTree._traverse_explicit(
                     left, fn,
                     BinaryTree._next(value, right, fn)
-                )
+                ))
 
     @staticmethod
     def _apply(cont: Done | Next | Concat, value):
@@ -143,7 +145,7 @@ class BinaryTree:
     def _traverse_apply(root, fn, cont):
         match root:
             case None:
-                return []
+                return BinaryTree._apply(cont, [])
 
             case Leaf(value):
                 return BinaryTree._apply(cont, [fn(value)])
@@ -152,65 +154,9 @@ class BinaryTree:
                 return BinaryTree._traverse_apply(
                     left, fn, Next(right, value, fn, cont))
 
-    @staticmethod
-    def _traverse_stack(root, fn):
-        # This wasn't in the talk, but i think that not doing
-        # the stack version that I could come up with
-        # by just mimicking the behaviour of the `apply` version
-        # would leave my understanding a bit short
-        match root:
-            case None:
-                return []
-            case Leaf(value):
-                return [fn(value)]
-
-        stack = [(root.value, root.right)]
-        root = root.left
-        results = []
-
-        while len(stack) > 0:
-            # following the execution of _traverse_apply, we see that
-            # Next will only be applied until we hit a Leaf
-            # Therefore we add to the stack until root is a Leaf
-
-            while not isinstance(root, Leaf) and root.left is not None:
-                stack.append((root.value, root.right))
-                root = root.left
-
-            # Then we need to apply, which corresponds to pop from the stack
-
-            top = stack.pop()
-
-            match top:
-
-                # Basically a special case of ls + val + []
-                case (value, None):
-                    results.append(fn(root.value))
-                    results.append(fn(value))
-
-                # A shortcut to do Concat when there's no real need to
-                # Keep doing "recursion" by adding to the stack
-                case (value, Leaf(val)):
-                    results.append(fn(root.value))
-                    results.append(fn(value))
-                    results.append(fn(val))
-
-                # _traverse_apply(right, Concat(ls, value))
-                case (value, Node(_)):
-                    stack.append((value, root.value))
-                    root = top[1]
-
-                # apply Concat
-                case (value, ls):
-                    results.append(fn(ls))
-                    results.append(fn(value))
-                    results.append(fn(root.value))
-
-        return results
-
     def traverse(self, fn: Callable = lambda x: x):
-        return BinaryTree._traverse_stack(
-            self.head, fn)
+        return BinaryTree._traverse_apply(
+            self.head, fn, Done())
 
     def insert(self, value):
         self.head = BinaryTree._insert(self.head, value)
@@ -220,12 +166,13 @@ def main():
     tree = BinaryTree()
     tree.insert(2)
     tree.insert(1)
+    tree.insert(0)
     tree.insert(3)
+    tree.insert(4)
+    print(tree)
     for node in tree.traverse():
         print(node)
 
 
 if __name__ == "__main__":
     main()
-
-
