@@ -46,34 +46,70 @@ class Thunk:
 
 
 @dataclass
+class LeftInsert:
+    right: Union[None | Leaf | Node]
+    value: Any
+    cont: Union['LeftInsert', 'RightInsert', 'DoneInsert']
+
+
+@dataclass
+class RightInsert:
+    left: Union[None | Leaf | Node]
+    value: Any
+    cont: Union['LeftInsert', 'RightInsert', 'DoneInsert']
+
+
+@dataclass
+class DoneInsert:
+    pass
+
+
+@dataclass
 class BinaryTree:
     head: Leaf | Node = None
 
     @staticmethod
-    def _insert(root, value):
+    def _handle_leaf(root, value, insert_left):
         match root:
             case None:
                 return Leaf(value)
-
             case Leaf(val):
-                if value < val:
+                if insert_left:
                     return Node(Leaf(value), val, None)
                 else:
                     return Node(None, val, Leaf(value))
 
-            case Node(left, val, right):
-                if value < val:
-                    return Node(
-                        BinaryTree._insert(left, value),
-                        val,
-                        right
-                    )
+    # if this looks suspicious, yes I did defunctionalize `insert`
+    def insert(self, value):
+        if self.head is None:
+            self.head = Leaf(value)
+            return
+
+        elif isinstance(self.head, Leaf):
+            if value < self.head.value:
+                self.head = Node(Leaf(value), self.head.value, None)
+            else:
+                self.head = Node(None, self.head.value, Leaf(value))
+            return
+
+        root = self.head
+        while root is not None:
+            if value < root.value:
+                if isinstance(root.left, Node):
+                    root = root.left
                 else:
-                    return Node(
-                        left,
-                        val,
-                        BinaryTree._insert(right, value)
+                    root.left = BinaryTree._handle_leaf(
+                        root.left, value, True
                     )
+                    return
+            else:
+                if isinstance(root.right, Node):
+                    root = root.right
+                else:
+                    root.right = BinaryTree._handle_leaf(
+                        root.right, value, False
+                    )
+                    return
 
     @staticmethod
     def _traverse_naive(root, fn: Callable):
@@ -129,7 +165,6 @@ class BinaryTree:
                 return cont([fn(value)])
 
             case Node(left, value, right):
-                print(cont)
                 return cont(BinaryTree._traverse_explicit(
                     left, fn,
                     BinaryTree._next(value, right, fn)
@@ -222,21 +257,3 @@ class BinaryTree:
                 )
             case _:
                 raise ValueError(f"invalid strategy: {strategy}")
-
-    def insert(self, value):
-        self.head = BinaryTree._insert(self.head, value)
-
-
-def main():
-    tree = BinaryTree()
-    tree.insert(2)
-    tree.insert(1)
-    tree.insert(0)
-    tree.insert(3)
-    tree.insert(4)
-    for node in tree.traverse():
-        print(node)
-
-
-if __name__ == "__main__":
-    main()
