@@ -46,25 +46,6 @@ class Thunk:
 
 
 @dataclass
-class LeftInsert:
-    right: Union[None | Leaf | Node]
-    value: Any
-    cont: Union['LeftInsert', 'RightInsert', 'DoneInsert']
-
-
-@dataclass
-class RightInsert:
-    left: Union[None | Leaf | Node]
-    value: Any
-    cont: Union['LeftInsert', 'RightInsert', 'DoneInsert']
-
-
-@dataclass
-class DoneInsert:
-    pass
-
-
-@dataclass
 class BinaryTree:
     head: Leaf | Node = None
 
